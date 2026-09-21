@@ -71,7 +71,6 @@ class LSTMModel(nn.Module):
 #        print("out, hn, cn", out.shape, hn.shape, cn.shape)
 #        x_save = x.squeeze(-1).numpy()
 #        np.savetxt(f'x_ep{epoch}.csv', x_save, delimiter=',')
-        print("weight_ih_l", weight_ih_l.shape)
 #        h0_save = h0.squeeze(0).detach().numpy()
 #        c0_save = c0.squeeze(0).detach().numpy()
 #        hn_save = hn.squeeze(0).detach().numpy()
@@ -114,4 +113,8 @@ for epoch in range(num_epochs):
 
     if (epoch + 1) % 10 == 0:
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.8f}')
+
+
+# EVALUATE PREDICTIONS #####################################################
+
 
