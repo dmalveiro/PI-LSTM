@@ -53,7 +53,7 @@ class LSTMModel(nn.Module):
         super(LSTMModel, self).__init__()
         self.hidden_dim = hidden_dim
         self.layer_dim = layer_dim
-        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)   # multilayer LSTM (last hidden state: h)
+        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)   # multilayer LSTM network (last hidden state: h)
         self.fc = nn.Linear(hidden_dim, output_dim)				  # prediction: y=W*h+b
 
     # Forward pass on the LSTM unit
@@ -100,20 +100,24 @@ num_epochs = 100
 h0, c0 = None, None
 
 for epoch in range(num_epochs):
-    model.train()
-    optimizer.zero_grad()
 
+    model.train()		# Set the model in training mode
+    optimizer.zero_grad()	# Clear old gradients (from previous epoch)
+
+    # Pass variables to "forward()" function
+    # Pass input "trainX", current model's "h0" and "c0"
+    # Returns model predictions ("output"), and current model's "hn" and "cn" as the next model's (next epoch) "h0" and "c0"
     outputs, h0, c0 = model(trainX, epoch, h0, c0)
 
-    loss = criterion(outputs, trainY)
-    loss.backward()
-    optimizer.step()
+    loss = criterion(outputs, trainY)	# Calculate the loss between the predicted output and the reference
+    loss.backward()			# Gradient of the loss w.r.t. trainable parameters (dL/dθ)
+    optimizer.step()			# Updates the parameters: θ(i) = θ(i-1) - η * dL/dθ
 
-    h0, c0 = h0.detach(), c0.detach()
+    h0, c0 = h0.detach(), c0.detach()	# Take the next model's "h0" and "c0" and disconnect them from the computational graph
 
+    # Print epoch and corresponding loss value
     if (epoch + 1) % 10 == 0:
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.8f}')
-
 
 # EVALUATE PREDICTIONS #####################################################
 
