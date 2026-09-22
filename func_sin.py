@@ -149,6 +149,7 @@ with torch.no_grad(): y_pred, _, _ = model(testX, epoch, h0, c0)	# Predict y_pre
 y_pred = y_pred.squeeze(-1).detach().numpy()
 y_exact = testY.squeeze(-1).detach().numpy()
 np.savetxt('y_pred.csv', y_pred, delimiter=',')
+np.savetxt('y_exact.csv', y_exact, delimiter=',')
 
 l2_error = np.linalg.norm(y_exact - y_pred) / np.linalg.norm(y_exact)
 print("L2 error", l2_error)
