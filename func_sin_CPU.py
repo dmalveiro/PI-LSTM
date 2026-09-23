@@ -1,25 +1,18 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import torch
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-
-# Defining GPU device as "device"
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# Precision
-precision = torch.float32
 
 # PREPARE DATA #############################################################
 
 np.random.seed(0)
 torch.manual_seed(0)
 
-t = torch.linspace(0, 100, 1000, dtype=precision, device=device)    # Create the tensor directly on GPU memory (device)
-t1 = torch.linspace(330, 530, 1000, dtype=precision, device=device)
-data = torch.sin(t)    # Since t is already on the device, any new variable created from it is kept on the device
-data1 = torch.sin(t1)
+#t = np.linspace(0, 10000, 100000000)
+t = np.linspace(0, 100, 1000)
+t1 = np.linspace(330, 530, 1000)
+data = np.sin(t)
+data1 = np.sin(t1)
 
 def create_sequences(data, seq_length):
     xs, ys = [], []
@@ -28,7 +21,7 @@ def create_sequences(data, seq_length):
         y = data[i + seq_length]
         xs.append(x)
         ys.append(y)
-    return torch.stack(xs), torch.stack(ys)
+    return np.array(xs), np.array(ys)\
 
 def create_sequences1(data1, seq_length):
     xs1, ys1 = [], []
@@ -37,21 +30,20 @@ def create_sequences1(data1, seq_length):
         y1 = data1[i + seq_length]
         xs1.append(x1)
         ys1.append(y1)
-    return torch.stack(xs1), torch.stack(ys1)
+    return np.array(xs1), np.array(ys1)\
 
 seq_length = 10
 X, y = create_sequences(data, seq_length)
 X1, y1 = create_sequences1(data1, seq_length)
 
-trainX = X[:, :, None].to(dtype=precision, device=device)
-trainY = y[:, None].to(dtype=precision, device=device)
+trainX = torch.tensor(X[:, :, None], dtype=torch.float32)
+trainY = torch.tensor(y[:, None], dtype=torch.float32)
 
-testX = X1[:, :, None].to(dtype=precision, device=device)
-testY = y1[:, None].to(dtype=precision, device=device)
+testX = torch.tensor(X1[:, :, None], dtype=torch.float32)
+testY = torch.tensor(y1[:, None], dtype=torch.float32)
 
-train_x = trainX.squeeze(-1).cpu().numpy()	# Pass from VRAM to RAM
-train_y = trainY.squeeze(-1).cpu().numpy()
-t = t.cpu().numpy()
+train_x = trainX.squeeze(-1).numpy()
+train_y = trainY.squeeze(-1).numpy()
 np.savetxt('t.csv', t, delimiter=',')
 np.savetxt('train_x.csv', train_x, delimiter=',')
 np.savetxt('train_y.csv', train_y, delimiter=',')
@@ -75,15 +67,17 @@ class LSTMModel(nn.Module):
         super(LSTMModel, self).__init__()
         self.hidden_dim = hidden_dim
         self.layer_dim = layer_dim
-        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True, dtype=precision, device=device)   # forward pass on multilayer LSTM
-        self.fc = nn.Linear(hidden_dim, output_dim, dtype=precision, device=device)	# prediction: y=W*h+b
+        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)   # forward pass on multilayer LSTM network (last hidden state: h)
+        self.fc = nn.Linear(hidden_dim, output_dim)				  # prediction: y=W*h+b
 
     # Forward pass on the LSTM unit
     # This function runs once per epoch
     def forward(self, x, epoch, h0=None, c0=None):
         if h0 is None or c0 is None:
-            h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim, dtype=precision, device=device)	# initial hidden state
-            c0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim, dtype=precision, device=device)	# initial cell state
+            h0 = torch.zeros(self.layer_dim, x.size(
+                0), self.hidden_dim).to(x.device)	# initial hidden state
+            c0 = torch.zeros(self.layer_dim, x.size(
+                0), self.hidden_dim).to(x.device)	# initial cell state
 
         out, (hn, cn) = self.lstm(x, (h0, c0))	# out = hidden-state output at every sequence element
         ######
@@ -91,10 +85,10 @@ class LSTMModel(nn.Module):
 #        print("out, hn, cn", out.shape, hn.shape, cn.shape)
 #        x_save = x.squeeze(-1).numpy()
 #        np.savetxt(f'x_ep{epoch}.csv', x_save, delimiter=',')
-#        h0_save = h0.squeeze(0).detach().cpu().numpy()
-#        c0_save = c0.squeeze(0).detach().cpu().numpy()
-#        hn_save = hn.squeeze(0).detach().cpu().numpy()
-#        cn_save = cn.squeeze(0).detach().cpu().numpy()
+#        h0_save = h0.squeeze(0).detach().numpy()
+#        c0_save = c0.squeeze(0).detach().numpy()
+#        hn_save = hn.squeeze(0).detach().numpy()
+#        cn_save = cn.squeeze(0).detach().numpy()
 #        np.savetxt(f'h0_ep{epoch}.csv', h0_save, delimiter=',')
 #        np.savetxt(f'c0_ep{epoch}.csv', c0_save, delimiter=',')
 #        np.savetxt(f'hn_ep{epoch}.csv', hn_save, delimiter=',')
@@ -120,7 +114,7 @@ num_epochs = 1000
 stepoch = 10
 num_losses = int(num_epochs / stepoch)
 h0, c0 = None, None
-loss_history = np.zeros((num_losses,), dtype=np.float32)
+loss_history = np.zeros((num_losses,))
 loss_i = 0
 
 for epoch in range(num_epochs):
@@ -152,8 +146,8 @@ np.savetxt('loss_history.csv', loss_history.8f, delimiter=',')
 model.eval()	# Set the model in evaluation mode
 with torch.no_grad(): y_pred, _, _ = model(testX, epoch, h0, c0)	# Predict y_pred in the test set (testX)
 
-y_pred = y_pred.squeeze(-1).detach().cpu().numpy()
-y_exact = testY.squeeze(-1).detach().cpu().numpy()
+y_pred = y_pred.squeeze(-1).detach().numpy()
+y_exact = testY.squeeze(-1).detach().numpy()
 np.savetxt('y_pred.csv', y_pred, delimiter=',')
 np.savetxt('y_exact.csv', y_exact, delimiter=',')
 
