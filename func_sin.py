@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Precision
-precision = torch.float32
+precision = torch.float64
 
 # PREPARE DATA #############################################################
 
@@ -49,7 +49,7 @@ trainY = y[:, None].to(dtype=precision, device=device)
 testX = X1[:, :, None].to(dtype=precision, device=device)
 testY = y1[:, None].to(dtype=precision, device=device)
 
-train_x = trainX.squeeze(-1).cpu().numpy()	# Pass from VRAM to RAM
+train_x = trainX.squeeze(-1).cpu().numpy()	# Remove the last dimension and pass from VRAM to RAM
 train_y = trainY.squeeze(-1).cpu().numpy()
 t = t.cpu().numpy()
 np.savetxt('t.csv', t, delimiter=',')
@@ -120,7 +120,7 @@ num_epochs = 1000
 stepoch = 10
 num_losses = int(num_epochs / stepoch)
 h0, c0 = None, None
-loss_history = np.zeros((num_losses,), dtype=np.float32)
+loss_history = np.zeros((num_losses,), dtype=np.float64)
 loss_i = 0
 
 for epoch in range(num_epochs):
@@ -145,7 +145,7 @@ for epoch in range(num_epochs):
         loss_history[loss_i] = loss.item()
         loss_i += 1
 
-np.savetxt('loss_history.csv', loss_history.8f, delimiter=',')
+np.savetxt('loss_history.csv', loss_history, delimiter=',')
 
 # EVALUATE PREDICTIONS #####################################################
 
