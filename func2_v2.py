@@ -83,15 +83,19 @@ class LSTMModel(nn.Module):
         super(LSTMModel, self).__init__()
         self.hidden_dim = hidden_dim
         self.layer_dim = layer_dim
-        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True, dtype=precision, device=device)   # forward pass on multilayer LSTM
+        self.lstm_l0 = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True, dtype=precision, device=device)   # forward pass on LSTM layer 0
+        self.lstm_l1 = nn.LSTM(hidden_dim, hidden_dim, layer_dim, batch_first=True, dtype=precision, device=device)   # forward pass on LSTM layer 1
         self.fc = nn.Linear(hidden_dim, output_dim, dtype=precision, device=device)	# prediction: y=W*h+b
 
     # Forward pass on the LSTM unit
     # This function runs once per epoch
-    def forward(self, x, epoch, h0=None, c0=None):
-        if h0 is None or c0 is None:
-            h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim, dtype=precision, device=device)	# initial hidden state
-            c0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim, dtype=precision, device=device)	# initial cell state
+    def forward(self, x, epoch, h0_l0=None, c0_l0=None, h0_l1=None, c0_l1=None):
+        if h0_l0 is None or c0_l0 is None:
+            h0_l0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim, dtype=precision, device=device)	# initial hidden state
+            c0_l0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim, dtype=precision, device=device)	# initial cell state
+        if h0_l1 is None or c0_l1 is None:
+            h0_l1 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim, dtype=precision, device=device)
+            c0_l1 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim, dtype=precision, device=device)
 
         # 4
         #print("EPOCH", epoch, "---------------")
@@ -101,18 +105,17 @@ class LSTMModel(nn.Module):
         #print("c0", c0.device, c0.requires_grad, c0.is_leaf, c0.grad)
         ######
 
-        out, (hn, cn) = self.lstm(x, (h0, c0))	# out = hidden-state output at every sequence element
-
         # 5
         # for every epoch, it saves the parameters before the parameter update by the Adam optimizer
         print("EPOCH", epoch, "---------------")
-        print("xyzt, h0, c0", x.shape, h0.shape, c0.shape)
-        print("out, hn, cn", out.shape, hn.shape, cn.shape)
-        for k in range(self.layer_dim):
-            W_ih = getattr(model.lstm, f"weight_ih_l{k}")
-            W_hh = getattr(model.lstm, f"weight_hh_l{k}")
-            b_ih = getattr(model.lstm, f"bias_ih_l{k}")
-            b_hh = getattr(model.lstm, f"bias_hh_l{k}")
+        def verify5(k, x, h0, c0, out, hn, cn):
+            print(f"xyzt_l{k}, h0_l{k}, c0_l{k}", x.shape, h0.shape, c0.shape)
+            print(f"out_l{k}, hn_l{k}, cn_l{k}", out.shape, hn.shape, cn.shape)
+            lstm_layer = getattr(model, f"lstm_l{k}")
+            W_ih = lstm_layer.weight_ih_l0
+            W_hh = lstm_layer.weight_hh_l0
+            b_ih = lstm_layer.bias_ih_l0
+            b_hh = lstm_layer.bias_hh_l0
             print(f"W_ih_l{k}:", W_ih.shape)
             print(f"W_hh_l{k}:", W_hh.shape)
             print(f"b_ih_l{k}:", b_ih.shape)
@@ -125,30 +128,37 @@ class LSTMModel(nn.Module):
             np.savetxt(f'W_hh_l{k}_ep{epoch}.csv', W_hh_, delimiter=',')
             np.savetxt(f'b_ih_l{k}_ep{epoch}.csv', b_ih_, delimiter=',')
             np.savetxt(f'b_hh_l{k}_ep{epoch}.csv', b_hh_, delimiter=',')
-        xyzt_ = x.detach().cpu().numpy()
-        h0_ = h0.detach().cpu().numpy()
-        c0_ = c0.detach().cpu().numpy()
-        out_ = out.detach().cpu().numpy()
-        hn_ = hn.detach().cpu().numpy()
-        cn_ = cn.detach().cpu().numpy()
-        np.savetxt(f'x_ep{epoch}.csv', xyzt_[:, :, 0], delimiter=',')
-        np.savetxt(f'y_ep{epoch}.csv', xyzt_[:, :, 1], delimiter=',')
-        np.savetxt(f'z_ep{epoch}.csv', xyzt_[:, :, 2], delimiter=',')
-        np.savetxt(f't_ep{epoch}.csv', xyzt_[:, :, 3], delimiter=',')
-        for hd in range(self.hidden_dim):
-            np.savetxt(f'h0_hid{hd}_ep{epoch}.csv', h0_[:, :, hd], delimiter=',')
-            np.savetxt(f'c0_hid{hd}_ep{epoch}.csv', c0_[:, :, hd], delimiter=',')
-            np.savetxt(f'hn_hid{hd}_ep{epoch}.csv', hn_[:, :, hd], delimiter=',')
-            np.savetxt(f'cn_hid{hd}_ep{epoch}.csv', cn_[:, :, hd], delimiter=',')
-            np.savetxt(f'out_hid{hd}_ep{epoch}.csv', out_[:, :, hd], delimiter=',')
+            x_ = x.detach().cpu().numpy()
+            h0_ = h0.detach().cpu().numpy()
+            c0_ = c0.detach().cpu().numpy()
+            out_ = out.detach().cpu().numpy()
+            hn_ = hn.detach().cpu().numpy()
+            cn_ = cn.detach().cpu().numpy()
+            if k == 0:
+                np.savetxt(f'x_ep{epoch}.csv', x_[:, :, 0], delimiter=',')
+                np.savetxt(f'y_ep{epoch}.csv', x_[:, :, 1], delimiter=',')
+                np.savetxt(f'z_ep{epoch}.csv', x_[:, :, 2], delimiter=',')
+                np.savetxt(f't_ep{epoch}.csv', x_[:, :, 3], delimiter=',')
+            for hd in range(self.hidden_dim):
+                if k > 0: np.savetxt(f'h_t1_hid{hd}_ep{epoch}.csv', x_[:, :, hd], delimiter=',')
+                np.savetxt(f'h0_hid{hd}_ep{epoch}.csv', h0_[:, :, hd], delimiter=',')
+                np.savetxt(f'c0_hid{hd}_ep{epoch}.csv', c0_[:, :, hd], delimiter=',')
+                np.savetxt(f'hn_hid{hd}_ep{epoch}.csv', hn_[:, :, hd], delimiter=',')
+                np.savetxt(f'cn_hid{hd}_ep{epoch}.csv', cn_[:, :, hd], delimiter=',')
+                np.savetxt(f'out_hid{hd}_ep{epoch}.csv', out_[:, :, hd], delimiter=',')
         ######
 
+        out_l0, (hn_l0, cn_l0) = self.lstm_l0(x, (h0_l0, c0_l0))
+        verify5(0, x, h0_l0, c0_l0, out_l0, hn_l0, cn_l0)
+        out_l1, (hn_l1, cn_l1) = self.lstm_l1(out_l0, (h0_l1, c0_l1))           # out = hidden-state output at every sequence element
+        verify5(1, out_l0, h0_l1, c0_l1, out_l1, hn_l1, cn_l1)
+
         # y = self.fc(h)
-        out = self.fc(out)	# call to prediction: for all time steps, y=W*h+b, where W and b are the parameters of the linear layer
+        y = self.fc(out_l1)	# call to prediction: for all time steps, y=W*h+b, where W and b are the parameters of the linear layer
 
         # 6
-        print("f:", out.shape)
-        f_ = out.squeeze(-1).detach().cpu().numpy()
+        print("f:", y.shape)
+        f_ = y.squeeze(-1).detach().cpu().numpy()
         np.savetxt(f'f_ep{epoch}.csv', f_, delimiter=',')
         W_fc = model.fc.weight
         b_fc = model.fc.bias
@@ -160,12 +170,12 @@ class LSTMModel(nn.Module):
         np.savetxt(f'b_fc_ep{epoch}.csv', b_fc_, delimiter=',')
         ######
 
-        return out, hn, cn
+        return y, hn_l0, cn_l0, hn_l1, cn_l1
 
 
 # INITIALIZE MODEL, LOSS FUNCTION AND OPTIMIZER ############################
 
-model = LSTMModel(input_dim=H_in, hidden_dim=7, layer_dim=2, output_dim=H_out)
+model = LSTMModel(input_dim=H_in, hidden_dim=7, layer_dim=1, output_dim=H_out)
 criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
@@ -180,7 +190,8 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 num_epochs = 3
 stepoch = 1
 num_losses = int(num_epochs / stepoch)
-h0, c0 = None, None
+h0_l0, c0_l0 = None, None
+h0_l1, c0_l1 = None, None
 loss_history = np.zeros((num_losses,), dtype=np.float64)
 loss_i = 0
 
@@ -204,13 +215,16 @@ for epoch in range(num_epochs):
     # Pass variables to "forward()" function
     # Pass input "trainX", current model's "h0" and "c0"
     # Returns model predictions ("output"), and current model's "hn" and "cn" as the next model's (next epoch) "h0" and "c0"
-    outputs, h0, c0 = model(xyzt_train, epoch, h0, c0)
+    outputs, hn_l0, cn_l0, hn_l1, cn_l1 = model(xyzt_train, epoch, h0_l0, c0_l0, h0_l1, c0_l1)
 
     loss = criterion(outputs, f_train)	# Calculate the loss between the predicted output (training set) and the reference
     loss.backward()			# Gradient of the loss w.r.t. trainable parameters (dL/dθ)
     optimizer.step()			# Updates the parameters: θ(i) = θ(i-1) - η * dL/dθ
 
-    h0, c0 = h0.detach(), c0.detach()	# Take the next model's "h0" and "c0" and disconnect them from the computational graph
+    h0_l0 = hn_l0.detach()
+    c0_l0 = cn_l0.detach()
+    h0_l1 = hn_l1.detach()
+    c0_l1 = cn_l1.detach()
 
     # Print epoch and corresponding loss value
     if (epoch + 1) % stepoch == 0:
@@ -223,11 +237,12 @@ np.savetxt('loss_history.csv', loss_history, delimiter=',')
 
 # EVALUATE PREDICTIONS #####################################################
 
-h0, c0 = None, None
+h0_l0, c0_l0 = None, None
+h0_l1, c0_l1 = None, None
 
 epoch = 'TEST'
 model.eval()	# Set the model in evaluation mode
-with torch.no_grad(): f_pred, _, _ = model(xyzt_test, epoch, h0, c0)	# Predict y_pred in the test set (testX)
+with torch.no_grad(): f_pred, _, _, _, _ = model(xyzt_test, epoch, h0_l0, c0_l0, h0_l1, c0_l1)	# Predict y_pred in the test set (testX)
 
 f_pred = f_pred.squeeze(-1).detach().cpu().numpy()
 f_exact = f_test.squeeze(-1).detach().cpu().numpy()
