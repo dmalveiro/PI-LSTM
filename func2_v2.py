@@ -3,8 +3,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import torch
 import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
-
 
 # Defining GPU device as "device"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -140,16 +138,17 @@ class LSTMModel(nn.Module):
                 np.savetxt(f'z_ep{epoch}.csv', x_[:, :, 2], delimiter=',')
                 np.savetxt(f't_ep{epoch}.csv', x_[:, :, 3], delimiter=',')
             for hd in range(self.hidden_dim):
-                if k > 0: np.savetxt(f'h_t1_hid{hd}_ep{epoch}.csv', x_[:, :, hd], delimiter=',')
-                np.savetxt(f'h0_hid{hd}_ep{epoch}.csv', h0_[:, :, hd], delimiter=',')
-                np.savetxt(f'c0_hid{hd}_ep{epoch}.csv', c0_[:, :, hd], delimiter=',')
-                np.savetxt(f'hn_hid{hd}_ep{epoch}.csv', hn_[:, :, hd], delimiter=',')
-                np.savetxt(f'cn_hid{hd}_ep{epoch}.csv', cn_[:, :, hd], delimiter=',')
-                np.savetxt(f'out_hid{hd}_ep{epoch}.csv', out_[:, :, hd], delimiter=',')
+                if k > 0: np.savetxt(f'ht_l{k}_hid{hd}_ep{epoch}.csv', x_[:, :, hd], delimiter=',')
+                np.savetxt(f'h0_l{k}_hid{hd}_ep{epoch}.csv', h0_[:, :, hd], delimiter=',')
+                np.savetxt(f'c0_l{k}_hid{hd}_ep{epoch}.csv', c0_[:, :, hd], delimiter=',')
+                np.savetxt(f'hn_l{k}_hid{hd}_ep{epoch}.csv', hn_[:, :, hd], delimiter=',')
+                np.savetxt(f'cn_l{k}_hid{hd}_ep{epoch}.csv', cn_[:, :, hd], delimiter=',')
+                np.savetxt(f'out_l{k}_hid{hd}_ep{epoch}.csv', out_[:, :, hd], delimiter=',')
         ######
 
         out_l0, (hn_l0, cn_l0) = self.lstm_l0(x, (h0_l0, c0_l0))
         verify5(0, x, h0_l0, c0_l0, out_l0, hn_l0, cn_l0)
+
         out_l1, (hn_l1, cn_l1) = self.lstm_l1(out_l0, (h0_l1, c0_l1))           # out = hidden-state output at every sequence element
         verify5(1, out_l0, h0_l1, c0_l1, out_l1, hn_l1, cn_l1)
 
