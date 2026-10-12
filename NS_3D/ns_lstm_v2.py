@@ -234,12 +234,6 @@ def compute_gradients(u_mat, x, L, dt, epoch):
     # List to accumulate the result for each time step
     uvwp_grad_mid_all = []
 
-    ####
-    grad_deriv = []
-    grad_sinx = []
-    grad_xyz = []
-    ####
-
     # create=True even for the highest order derivatives for (u,v,w,p) since dL/dθ is also composed of the derivatives of them (chain rule)
 
     for t_n1 in range(L):
@@ -247,14 +241,10 @@ def compute_gradients(u_mat, x, L, dt, epoch):
         t = t_n1 * dt
 
         # (u,v,w,p) components at current time step
-#        u_n1 = u_mat[:N_interior, t_n1, 0:1]
+        u_n1 = u_mat[:N_interior, t_n1, 0:1]
         v_n1 = u_mat[:N_interior, t_n1, 1:2]
         w_n1 = u_mat[:N_interior, t_n1, 2:3]
         p_n1 = u_mat[:N_interior, t_n1, 3:4]
-
-        u_n1 = torch.sin(x[:N_interior, t_n1, 0:1])
-        #v_n1 = torch.sin(x[:N_interior, t_n1, 1:2])
-        #w_n1 = torch.sin(x[:N_interior, t_n1, 2:3])
 
         # Space derivatives - u
         grad_u = derivative(u_n1, x, create=True)
@@ -366,39 +356,13 @@ def compute_gradients(u_mat, x, L, dt, epoch):
         w_x_n, w_y_n, w_z_n, w_xx_n, w_yy_n, w_zz_n = w_x_n1, w_y_n1, w_z_n1, w_xx_n1, w_yy_n1, w_zz_n1
         p_x_n, p_y_n, p_z_n = p_x_n1, p_y_n1, p_z_n1
 
-###########
-        grad_deriv_i = torch.cat((u_x_n1, u_xx_n1, u_y_n1, u_yy_n1, u_z_n1, u_zz_n1), dim=0)
-        grad_deriv.append(grad_deriv_i)
-
-        # xyz
-        grad_xyz_i = x[:N_interior, t_n1, :3]
-        grad_xyz.append(grad_xyz_i)
-
-        grad_sinx.append(u_n1)
-
-    grad_deriv = torch.cat(grad_deriv, dim=1)
-    grad_deriv_np = grad_deriv.detach().cpu().numpy()
-
-    grad_xyz = torch.cat(grad_xyz, dim=1)
-    grad_xyz_np = grad_xyz.detach().cpu().numpy()
-
-    grad_sinx = torch.cat(grad_sinx, dim=1)
-    grad_sinx_np = grad_sinx.detach().cpu().numpy()
-
-    np.savetxt(f'grad_deriv_ep_{epoch}.csv', grad_deriv_np, delimiter=',')
-    np.savetxt(f'grad_xyz_ep_{epoch}.csv', grad_xyz_np, delimiter=',')
-    np.savetxt(f'grad_sinx_ep_{epoch}.csv', grad_sinx_np, delimiter=',')
-
-#    exit()
-###########
-
     uvwp_grad_mid_all = torch.cat(uvwp_grad_mid_all, dim=1)
 
     #print("requires_grad:", uvwp_grad_mid_all.requires_grad)
     #print("grad_fn:", uvwp_grad_mid_all.grad_fn)
     #exit()
 
-    return uvwp_grad_mid_all, grad_deriv
+    return uvwp_grad_mid_all
 
 
 # NAVIER-STOKES EQUATIONS ##################################################
@@ -410,7 +374,7 @@ def compute_gradients(u_mat, x, L, dt, epoch):
 
 def pde(u, x, Re, epoch):
 
-    grads, grad_deriv = compute_gradients(u, x, L, dt, epoch)
+    grads = compute_gradients(u, x, L, dt, epoch)
 
     F_mid_mx = (
         (grads[:,:,0:1] * grads[:,:,5:6] + grads[:,:,1:2] * grads[:,:,6:7] + grads[:,:,2:3] * grads[:,:,7:8])
@@ -435,7 +399,7 @@ def pde(u, x, Re, epoch):
     momentum_z = grads[:,:,18:19] + F_mid_mz
     continuity = grads[:,:,5:6] + grads[:,:,13:14] + grads[:,:,21:22]
 
-    return momentum_x, momentum_y, momentum_z, continuity, grad_deriv
+    return momentum_x, momentum_y, momentum_z, continuity
 
 
 # INITIALIZE MODEL, LOSS FUNCTION AND OPTIMIZER ############################
@@ -446,7 +410,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
 # TRAIN THE LSTM MODEL #####################################################
 
-num_epochs = 1
+num_epochs = 10
 stepoch = 1
 num_losses = int(num_epochs / stepoch)
 loss_history = np.zeros((num_losses, len(loss_weights)), dtype=np.float64)
@@ -482,7 +446,7 @@ def bc_ic_loss(n_bc, n_ic, criterion, uvwp_train_pred, uvwp_train_exact):
 
 def res_loss(Re, criterion, loss_weights, uvwp_train_pred, xyzt_train, epoch):
 
-    momentum_x, momentum_y, momentum_z, continuity, grad_deriv = pde(uvwp_train_pred, xyzt_train, Re, epoch)	   # compute residuals
+    momentum_x, momentum_y, momentum_z, continuity = pde(uvwp_train_pred, xyzt_train, Re, epoch)	   # compute residuals
 
     loss_momentum_x = criterion(momentum_x, torch.zeros_like(momentum_x))
     loss_momentum_y = criterion(momentum_y, torch.zeros_like(momentum_y))
@@ -494,7 +458,7 @@ def res_loss(Re, criterion, loss_weights, uvwp_train_pred, xyzt_train, epoch):
     #print("loss_residuals", loss_residuals.shape)
     #exit()
 
-    return loss_residuals, grad_deriv
+    return loss_residuals
 
 
 for epoch in range(num_epochs):
@@ -518,7 +482,7 @@ for epoch in range(num_epochs):
 #    uvwp_train_pred, h0, c0 = model(xyzt_train, epoch, h0, c0)
 
     loss_bcic = bc_ic_loss(n_bc, n_ic, criterion, uvwp_train_pred, uvwp_train_exact)
-    loss_residuals, grad_deriv = res_loss(Re, criterion, loss_weights, uvwp_train_pred, xyzt_train, epoch)
+    loss_residuals = res_loss(Re, criterion, loss_weights, uvwp_train_pred, xyzt_train, epoch)
     unweighted_losses = torch.cat((loss_residuals, loss_bcic))
     losses = unweighted_losses * loss_weights
     total_loss = torch.sum(losses)
@@ -604,7 +568,7 @@ print("L2 error velocity w:", l2_error_w)
 print("L2 error pressure p:", l2_error_p)
 
 print("\nEND OF TESTING\n")
-#exit()
+exit()
 
 #np.savetxt('u_test_pred.csv', uvwp_test_pred[:,:,0]., delimiter=',')
 #np.savetxt('uvwp_test_exact.csv', uvwp_test_exact, delimiter=',')
