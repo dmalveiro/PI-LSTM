@@ -358,14 +358,14 @@ def compute_gradients(uvwp, xyzt, L, dt, epoch, model):
 
 ###########
 
-    torch.cuda.synchronize()
-    start1 = time.perf_counter()
+#    torch.cuda.synchronize()
+#    start1 = time.perf_counter()
 
     fd_deriv = finite_differences(uvwp, xyzt, L, dt, epoch, model)
 
-    torch.cuda.synchronize()
-    end1 = time.perf_counter()
-    print(f"Elapsed time: {end1 - start1:.6f} s")
+#    torch.cuda.synchronize()
+#    end1 = time.perf_counter()
+#    print(f"Elapsed time: {end1 - start1:.6f} s")
 
 #    grad_deriv = autograd(uvwp, xyzt, L, dt, epoch, model)
 ###############*****************
@@ -493,7 +493,7 @@ def pde(u, xyzt, Re, epoch, model):
 
 model = LSTMModel(input_dim=H_in, hidden_dim=100, layer_dim=20, output_dim=H_out)
 criterion = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
 # TRAIN THE LSTM MODEL #####################################################
 
